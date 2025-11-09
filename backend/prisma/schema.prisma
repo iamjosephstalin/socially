@@ -1,0 +1,188 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql" // Changed to PostgreSQL for production
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String   @id @default(uuid())
+  name           String
+  email          String   @unique
+  hashedPassword String
+  avatarUrl      String?
+  plan           UserPlan @default(FREE)
+  isActive       Boolean  @default(true)
+  lastLoginAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  linkedinAccounts LinkedInAccount[]
+  posts            Post[]
+  automations      Automation[]
+  subscription     Subscription?
+  usage            Usage[]
+
+  @@map("users")
+}
+
+model Subscription {
+  id            String           @id @default(uuid())
+  userId        String           @unique
+  plan          UserPlan
+  status        SubscriptionStatus
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  cancelAt      DateTime?
+  canceledAt    DateTime?
+  stripeSubscriptionId String?
+  stripeCustomerId     String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+model Usage {
+  id            String   @id @default(uuid())
+  userId        String
+  postsCreated  Int      @default(0)
+  postsScheduled Int     @default(0)
+  aiGenerations Int      @default(0)
+  month         Int
+  year          Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, month, year])
+  @@map("usage")
+}
+
+model LinkedInAccount {
+  id                String   @id @default(uuid())
+  userId            String
+  linkedinProfileId String
+  accessToken       String
+  refreshToken      String?
+  expiresAt         DateTime
+  profileName       String?
+  profileUrl        String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("linkedin_accounts")
+}
+
+model Post {
+  id             String     @id @default(uuid())
+  userId         String
+  content        String
+  status         PostStatus @default(DRAFT)
+  scheduledAt    DateTime
+  postedAt       DateTime?
+  linkedinPostId String? // Store LinkedIn post ID for analytics
+  errorMessage   String?
+  impressions    Int        @default(0)
+  likes          Int        @default(0)
+  comments       Int        @default(0)
+  shares         Int        @default(0)
+  clicks         Int        @default(0)
+  lastAnalyticsUpdate DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  // Relations
+  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  images PostImage[]
+
+  @@map("posts")
+}
+
+model PostImage {
+  id       String @id @default(uuid())
+  postId   String
+  imageUrl String
+  order    Int
+
+  // Relations
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@map("post_images")
+}
+
+model Automation {
+  id        String           @id @default(uuid())
+  userId    String
+  name      String
+  topics    String // JSON string for topics array
+  frequency String
+  time      String
+  status    AutomationStatus @default(ACTIVE)
+  lastRun   DateTime?
+  nextRun   DateTime?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("automations")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  action    String
+  entity    String?
+  entityId  String?
+  details   Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@map("audit_logs")
+}
+
+enum UserPlan {
+  FREE
+  BASIC
+  PRO
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  INCOMPLETE
+  INCOMPLETE_EXPIRED
+  PAST_DUE
+  TRIALING
+  UNPAID
+}
+
+enum PostStatus {
+  DRAFT
+  SCHEDULED
+  POSTED
+  ERROR
+}
+
+enum AutomationStatus {
+  ACTIVE
+  PAUSED
+}

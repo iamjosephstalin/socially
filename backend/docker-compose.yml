@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: socially-postgres
+    environment:
+      POSTGRES_DB: socially_db
+      POSTGRES_USER: socially_user
+      POSTGRES_PASSWORD: socially_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U socially_user -d socially_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for BullMQ
+  redis:
+    image: redis:7-alpine
+    container_name: socially-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  backend:
+    build: .
+    container_name: socially-backend
+    ports:
+      - "3001:3001"
+    environment:
+      DATABASE_URL: "postgresql://socially_user:socially_password@postgres:5432/socially_db"
+      REDIS_URL: "redis://redis:6379"
+      JWT_SECRET: "your-super-secret-jwt-key-change-this-in-production"
+      JWT_EXPIRES_IN: "7d"
+      LINKEDIN_CLIENT_ID: "your-linkedin-client-id"
+      LINKEDIN_CLIENT_SECRET: "your-linkedin-client-secret"
+      LINKEDIN_REDIRECT_URI: "http://localhost:3001/api/auth/linkedin/callback"
+      PORT: 3001
+      NODE_ENV: "development"
+      FRONTEND_URL: "http://localhost:5173"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./uploads:/app/uploads
+    command: >
+      sh -c "
+        npx prisma db push &&
+        npm run dev
+      "
+
+volumes:
+  postgres_data:
+  redis_data:
